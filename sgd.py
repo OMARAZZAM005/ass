@@ -1,43 +1,24 @@
+from tensorflow.keras.layers import Dense
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split 
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.models import Sequential
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import fetch_california_housing
-from sklearn.metrics import r2_score
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
 
+X,Y=load_iris(return_X_y=True)
+X=X[:100]
+Y=Y[:100]
+scaler=StandardScaler()
+X_Train,X_Test,Y_Train,Y_Test=train_test_split(X,Y,test_size=0.2,random_state=42)
+X_Train=scaler.fit_transform(X_Train)
+X_Test=scaler.fit_transform(X_Test)
 
-df = fetch_california_housing(as_frame=True).frame.sample(300, random_state=42)
-X_raw = df[['MedInc']].values
-y = df[['MedHouseVal']].values
+model=Sequential([Dense(1,activation='sigmoid')])
+model.compile(optimizer='sgd', loss='binary_crossentropy', metrics=['accuracy'])
+history=model.fit(X_Train,Y_Train,epochs=50,batch_size=len(X_Train),verbose=0)
+pre=model.predict(X_Test)
 
-# 2. عمل Polynomial وتجهيز المدخلات
-poly = PolynomialFeatures(degree=2)
-X = poly.fit_transform(X_raw)
-X = StandardScaler().fit_transform(X)
-X[:, 0] = 1.0  # Bias column
-
-m, n = X.shape
-lr = 0.001  # معدل تعلم أصغر لتفادي التذبذب الحاد عند التحديث بعينة واحدة
-epochs = 50
-
-# دالة بسيطة لطباعة النتيجة
-def print_metrics(name, w):
-  preds = X @ w
-  loss = np.mean((preds - y) ** 2)
-  acc = r2_score(y, preds) * 100
-  print(f"[{name}] -> Loss: {loss:.4f} | Accuracy: {acc:.2f}%")
-
-
-np.random.seed(42)
-w = np.zeros((n, 1))
-
-for epoch in range(epochs):
-  # خلط ترتيب العينات في كل Epoch
-  indices = np.random.permutation(m)
-
-  # حساب الجرادينت وتحديث الأوزان لعينة واحدة فقط في كل خطوة
-  for i in indices:
-    xi = X[i:i + 1]
-    yi = y[i:i + 1]
-    grad = 2 * xi.T @ (xi @ w - yi)
-    w -= lr * grad
-
-print_metrics("SGD", w)
+test_loss, test_acc = model.evaluate(X_Test, Y_Test, verbose=0)
+print(f"Test Loss: {test_loss:.4f}")
+print(f"Test Accuracy: {test_acc * 100:.2f}%")
