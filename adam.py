@@ -1,50 +1,44 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import fetch_california_housing
-from sklearn.metrics import r2_score
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.datasets import load_breast_cancer
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import Adam
 
+X, y = load_breast_cancer(return_X_y=True)
+y_svm = y * 2 - 1
 
-df = fetch_california_housing(as_frame=True).frame.sample(300, random_state=42)
-X_raw = df[['MedInc']].values
-y = df[['MedHouseVal']].values
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y_svm, test_size=0.2, random_state=42
+)
 
-# 2. عمل Polynomial وتجهيز المدخلات
-poly = PolynomialFeatures(degree=2)
-X = poly.fit_transform(X_raw)
-X = StandardScaler().fit_transform(X)
-X[:, 0] = 1.0  # Bias column
+scaler = StandardScaler()
+X_train_s = scaler.fit_transform(X_train)
+X_test_s = scaler.transform(X_test)
 
-m, n = X.shape
-lr = 0.1
-epochs = 50
+model = Sequential([
+    Dense(
+        1,
+        input_shape=(X_train_s.shape[1],),
+        activation="linear",
+        kernel_regularizer="l2",
+    )
+])
+model.compile(optimizer=Adam(learning_rate=0.01), loss="hinge")
 
-# دالة بسيطة لطباعة النتيجة
-def print_metrics(name, w):
-  preds = X @ w
-  loss = np.mean((preds - y) ** 2)
-  acc = r2_score(y, preds) * 100
-  print(f"[{name}] -> Loss: {loss:.4f} | Accuracy: {acc:.2f}%")
+history = model.fit(
+    X_train_s, y_train, epochs=100, batch_size=32, verbose=0
+)
 
+y_pred = np.where(model.predict(X_test_s, verbose=0).flatten() >= 0, 1, -1)
+print("Adam Accuracy:", accuracy_score(y_test, y_pred))
 
-w = np.zeros((n, 1))
-m_w = np.zeros((n, 1))  # العزم الأول (متوسط الجرادينت)
-v_w = np.zeros((n, 1))  # العزم الثاني (متوسط مربع الجرادينت)
-beta1 = 0.9
-beta2 = 0.999
-eps = 1e-8
+plt.plot(history.history["loss"])
+plt.title("SVM Loss - Adam")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.show()
 
-for t in range(1, epochs + 1):
-  grad = (2 / m) * X.T @ (X @ w - y)
-
-  # تحديث العزم الأول والثاني
-  m_w = beta1 * m_w + (1 - beta1) * grad
-  v_w = beta2 * v_w + (1 - beta2) * (grad ** 2)
-
-  # تصحيح التحيز (Bias Correction)
-  m_hat = m_w / (1 - beta1 ** t)
-  v_hat = v_w / (1 - beta2 ** t)
-
-  # تحديث الأوزان
-  w -= lr * m_hat / (np.sqrt(v_hat) + eps)
-
-print_metrics("Adam", w)
