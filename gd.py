@@ -1,36 +1,31 @@
-import numpy as np
-from sklearn.datasets import fetch_california_housing
-from sklearn.metrics import r2_score
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+import matplotlib.pyplot as plt
+from sklearn.datasets import load_breast_cancer
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import SGD
+X, y = load_breast_cancer(return_X_y=True)
+y_svm = y * 2 - 1
 
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y_svm, test_size=0.2, random_state=42
+)
 
-df = fetch_california_housing(as_frame=True).frame.sample(300, random_state=42)
-X_raw = df[['MedInc']].values
-y = df[['MedHouseVal']].values
+scaler = StandardScaler()
+X_train_s = scaler.fit_transform(X_train)
+X_test_s = scaler.transform(X_test)
+model = Sequential([
+    Dense(
+        1,
+        input_shape=(X_train_s.shape[1],),
+        activation="linear",
+        kernel_regularizer="l2",
+    )
+])
+model.compile(optimizer=SGD(learning_rate=0.01), loss="hinge")
 
-# 2. عمل Polynomial وتجهيز المدخلات
-poly = PolynomialFeatures(degree=2)
-X = poly.fit_transform(X_raw)
-X = StandardScaler().fit_transform(X)
-X[:, 0] = 1.0  # Bias column
-
-m, n = X.shape
-lr = 0.05
-epochs = 50
-
-# دالة بسيطة لطباعة النتيجة
-def print_metrics(name, w):
-  preds = X @ w
-  loss = np.mean((preds - y) ** 2)
-  acc = r2_score(y, preds) * 100
-  print(f"[{name}] -> Loss: {loss:.4f} | Accuracy: {acc:.2f}%")
-
-
-w = np.zeros((n, 1))
-
-for epoch in range(epochs):
-  # حساب الجرادينت على كل الداتا دفعة واحدة
-  grad = (2 / m) * X.T @ (X @ w - y)
-  w -= lr * grad
-
-print_metrics("Gradient Descent", w)
+history = model.fit(
+    X_train_s, y_train, epochs=100, batch_size=len(X_train_s), verbose=0
+)
