@@ -1,48 +1,43 @@
+import matplotlib.pyplot as plt
 import numpy as np
-from sklearn.datasets import fetch_california_housing
-from sklearn.metrics import r2_score
-from sklearn.preprocessing import PolynomialFeatures, StandardScaler
+from sklearn.datasets import load_breast_cancer
+from sklearn.metrics import accuracy_score
+from sklearn.model_selection import train_test_split
+from sklearn.preprocessing import StandardScaler
+from tensorflow.keras.layers import Dense
+from tensorflow.keras.models import Sequential
+from tensorflow.keras.optimizers import SGD
 
+X, y = load_breast_cancer(return_X_y=True)
+y_svm = y * 2 - 1
 
-df = fetch_california_housing(as_frame=True).frame.sample(300, random_state=42)
-X_raw = df[['MedInc']].values
-y = df[['MedHouseVal']].values
+X_train, X_test, y_train, y_test = train_test_split(
+    X, y_svm, test_size=0.2, random_state=42
+)
 
-# 2. عمل Polynomial وتجهيز المدخلات
-poly = PolynomialFeatures(degree=2)
-X = poly.fit_transform(X_raw)
-X = StandardScaler().fit_transform(X)
-X[:, 0] = 1.0  # Bias column
+scaler = StandardScaler()
+X_train_s = scaler.fit_transform(X_train)
+X_test_s = scaler.transform(X_test)
 
-m, n = X.shape
-lr = 0.01
-epochs = 50
-batch_size = 32
+model = Sequential([
+    Dense(
+        1,
+        input_shape=(X_train_s.shape[1],),
+        activation="linear",
+        kernel_regularizer="l2",
+    )
+])
+model.compile(optimizer=SGD(learning_rate=0.01), loss="hinge")
 
-# دالة بسيطة لطباعة النتيجة
-def print_metrics(name, w):
-  preds = X @ w
-  loss = np.mean((preds - y) ** 2)
-  acc = r2_score(y, preds) * 100
-  print(f"[{name}] -> Loss: {loss:.4f} | Accuracy: {acc:.2f}%")
+history = model.fit(
+    X_train_s, y_train, epochs=100, batch_size=32, verbose=0
+)
 
+y_pred = np.where(model.predict(X_test_s, verbose=0).flatten() >= 0, 1, -1)
+print("Mini-Batch SGD Accuracy:", accuracy_score(y_test, y_pred))
 
-np.random.seed(42)
-w = np.zeros((n, 1))
-
-for epoch in range(epochs):
-  # خلط البيانات في بداية كل Epoch
-  indices = np.random.permutation(m)
-  X_shuffled = X[indices]
-  y_shuffled = y[indices]
-
-  # تقسيم البيانات إلى دفعات صغيرة (Mini-Batches)
-  for start in range(0, m, batch_size):
-    X_batch = X_shuffled[start:start + batch_size]
-    y_batch = y_shuffled[start:start + batch_size]
-    b_size = len(X_batch)
-
-    grad = (2 / b_size) * X_batch.T @ (X_batch @ w - y_batch)
-    w -= lr * grad
-
-print_metrics("Mini-Batch SGD", w)
+plt.plot(history.history["loss"])
+plt.title("SVM Loss - Mini-Batch SGD")
+plt.xlabel("Epochs")
+plt.ylabel("Loss")
+plt.show()
